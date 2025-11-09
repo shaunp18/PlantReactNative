@@ -31,6 +31,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="potions"
+        options={{
+          title: 'Potions',
+          tabBarIcon: ({ color }) => <Ionicons name="flask" size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="friends"
         options={{
           title: 'Friends',

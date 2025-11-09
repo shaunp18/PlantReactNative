@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,12 @@ import {
   Modal,
   TouchableOpacity,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -17,6 +23,8 @@ import { ScoreBadge } from '@/components/ScoreBadge';
 import { SprayButton } from '@/components/SprayButton';
 import { PlantCard } from '@/components/PlantCard';
 import { SoilMoistureCard } from '@/components/SoilMoistureCard';
+import { calculateSavingsPerSpray, formatMoney } from '@/utils/waterSavings';
+import { usePlantHealthMonitor } from '@/hooks/usePlantHealthMonitor';
 import type { Plant } from '@/store/useAppStore';
 
 export function HomeScreen() {
@@ -24,16 +32,53 @@ export function HomeScreen() {
   const isDark = colorScheme === 'dark';
 
   const { user, score, moneySavedUsd, plants, activity, addActivity, incrementScore, addMoneySaved, logout } = useAppStore();
+  
+  // Monitor ESP32 soil moisture and update plant health
+  usePlantHealthMonitor();
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
+  const [isSprayLoading, setIsSprayLoading] = useState(false);
+  
+  // Animation for money card bounce
+  const moneyCardScale = useSharedValue(1);
+  
+  const moneyCardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: moneyCardScale.value }],
+  }));
 
   const handleSpray = () => {
+    if (isSprayLoading) return; // Prevent multiple presses
+    
+    // Start loading state
+    setIsSprayLoading(true);
+    
+    // Calculate money saved based on number of plants
+    const numPlants = Math.max(1, plants.length); // At least 1 plant for calculation
+    const savingsPerSpray = calculateSavingsPerSpray(numPlants);
+    
+    // Bounce animation for money card
+    moneyCardScale.value = withSequence(
+      withSpring(1.1, { damping: 8, stiffness: 300 }),
+      withSpring(1, { damping: 8, stiffness: 300 })
+    );
+    
+    // Add the savings to the total
+    addMoneySaved(savingsPerSpray);
+    
+    // Create activity log entry
     const newActivity = {
       id: Date.now().toString(),
-      text: 'Casting Watering Spell... (stub)',
+      text: `Efficient watering saved ${formatMoney(savingsPerSpray)}`,
       ts: Date.now(),
     };
     addActivity(newActivity);
-    Alert.alert('Watering Spell Cast', 'Your plants are being watered! (UI stub)');
+    
+    // Optional: Increment score as well
+    incrementScore(10);
+    
+    // Reset loading after 2 seconds
+    setTimeout(() => {
+      setIsSprayLoading(false);
+    }, 2000);
   };
 
   const handleLogout = () => {
@@ -87,12 +132,17 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <SprayButton onPress={handleSpray} />
+        <SprayButton onPress={handleSpray} isLoading={isSprayLoading} />
 
         {/* Soil Moisture Sensor Card */}
         <SoilMoistureCard />
 
-        <View style={[styles.moneyCard, { backgroundColor: isDark ? Colors.dark.card : Colors.light.card }]}>
+        <Animated.View
+          style={[
+            styles.moneyCard,
+            { backgroundColor: isDark ? Colors.dark.card : Colors.light.card },
+            moneyCardAnimatedStyle,
+          ]}>
           <Text style={[styles.moneyLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
             Gold Saved
           </Text>
@@ -102,7 +152,7 @@ export function HomeScreen() {
           <Text style={[styles.moneySubtitle, { color: isDark ? '#9BA1A6' : '#687076' }]}>
             from efficient watering
           </Text>
-        </View>
+        </Animated.View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: isDark ? Colors.dark.text : Colors.light.text }]}>

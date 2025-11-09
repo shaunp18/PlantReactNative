@@ -10,6 +10,12 @@ export interface Plant {
   lastWatered: string;
   photoUri: string | null;
   location?: string;
+  drynessStartTime?: number; // Timestamp when soil became dry (ms)
+  healthAtDrynessStart?: number; // Plant health when dryness started (for calculating cumulative impact)
+  isConnectedToSensor?: boolean; // Whether this plant is connected to ESP32 sensor
+  spraysPerDay?: number; // Number of sprays per day needed (calculated from water needs)
+  dailyWaterML?: number; // Daily water requirement in milliliters
+  idealSoilMoisture?: number; // Ideal soil moisture percentage
 }
 
 export interface User {
@@ -78,6 +84,8 @@ interface AppState {
   logout: () => void;
   completeOnboarding: () => void;
   addPlant: (plant: Plant) => void;
+  updatePlantHealth: (plantId: string, newHealth: number) => void;
+  updatePlantDryness: (plantId: string, isDry: boolean) => void;
   addActivity: (activity: Activity) => void;
   incrementScore: (points: number) => void;
   addMoneySaved: (amount: number) => void;
@@ -212,6 +220,38 @@ export const useAppStore = create<AppState>((set) => ({
       ...state.activity,
     ],
   })),
+
+  updatePlantHealth: (plantId, newHealth) => set((state) => {
+    const updatedPlants = state.plants.map((plant) =>
+      plant.id === plantId ? { ...plant, brew: Math.max(0, Math.min(100, newHealth)) } : plant
+    );
+    return { plants: updatedPlants };
+  }),
+
+  updatePlantDryness: (plantId, isDry) => set((state) => {
+    const now = Date.now();
+    const updatedPlants = state.plants.map((plant) => {
+      if (plant.id !== plantId) return plant;
+      
+      if (isDry && !plant.drynessStartTime) {
+        // Soil just became dry - record the start time and current health
+        return { 
+          ...plant, 
+          drynessStartTime: now,
+          healthAtDrynessStart: plant.brew 
+        };
+      } else if (!isDry && plant.drynessStartTime) {
+        // Soil is no longer dry - clear the start time
+        return { 
+          ...plant, 
+          drynessStartTime: undefined,
+          healthAtDrynessStart: undefined
+        };
+      }
+      return plant;
+    });
+    return { plants: updatedPlants };
+  }),
 
   addActivity: (activity) => set((state) => ({
     activity: [activity, ...state.activity.slice(0, 19)],
