@@ -9,11 +9,12 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors, BrandColors } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
@@ -147,7 +148,7 @@ export function PotionsScreen() {
         setShowAddModal(false);
         setAddMode(null);
         setPlantLocation('');
-        Alert.alert('Plant Added!', `${plantData.name} has been added to your potions.`);
+        Alert.alert('Plant Added!', `${plantData.name} has been added to your cauldrons.`);
       } else {
         Alert.alert('Error', 'Could not identify the plant. Please try again or add manually.');
       }
@@ -174,7 +175,7 @@ export function PotionsScreen() {
             // Choose mode
             <>
               <Text style={[styles.modalTitle, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
-                Add New Potion
+                Add New Cauldron
               </Text>
               <Text style={[styles.modalSubtitle, { color: isDark ? '#9BA1A6' : '#687076' }]}>
                 How would you like to add your plant?
@@ -384,7 +385,7 @@ export function PotionsScreen() {
       style={[styles.container, { backgroundColor: isDark ? Colors.dark.background : Colors.light.background }]}
       edges={['top']}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: isDark ? Colors.dark.text : Colors.light.text }]}>Your Potions</Text>
+        <Text style={[styles.title, { color: isDark ? Colors.dark.text : Colors.light.text }]}>Your Cauldrons</Text>
         <Text style={[styles.subtitle, { color: isDark ? '#9BA1A6' : '#687076' }]}>
           {plants.length} {plants.length === 1 ? 'plant' : 'plants'}
         </Text>
@@ -395,7 +396,7 @@ export function PotionsScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="flask-outline" size={64} color={isDark ? '#9BA1A6' : '#687076'} />
             <Text style={[styles.emptyText, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
-              No potions yet
+              No cauldrons yet
             </Text>
             <Text style={[styles.emptySubtext, { color: isDark ? '#9BA1A6' : '#687076' }]}>
               Tap the button below to add your first plant
@@ -432,7 +433,13 @@ async function identifyPlantWithGemini(imageUri: string): Promise<{
     // Use expo-file-system for native, FileReader for web
     let base64Image: string;
     
-    if (typeof FileReader !== 'undefined' && imageUri.startsWith('http')) {
+    if (imageUri.startsWith('data:')) {
+      const commaIndex = imageUri.indexOf(',');
+      base64Image = commaIndex !== -1 ? imageUri.slice(commaIndex + 1) : imageUri;
+    } else if (
+      (typeof FileReader !== 'undefined' && (imageUri.startsWith('http') || imageUri.startsWith('blob:'))) ||
+      Platform.OS === 'web'
+    ) {
       // Web environment or remote URL
       const response = await fetch(imageUri);
       const blob = await response.blob();
@@ -448,15 +455,19 @@ async function identifyPlantWithGemini(imageUri: string): Promise<{
       });
     } else {
       // Native environment - use expo-file-system
-      base64Image = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
+      const nativeUri = imageUri.startsWith('file://') ? imageUri : `file://${imageUri}`;
+      const encoding: any = (FileSystem as any)?.EncodingType?.Base64 ?? 'base64';
+      base64Image = await FileSystem.readAsStringAsync(nativeUri, {
+        encoding,
       });
     }
 
     // Get Gemini API key from environment or use a placeholder
     // In production, store this securely
     const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 'AIzaSyCURZS8m6S6f2lVZdgfPWIaOLxoZt1Ur5Y';
-    
+    console.log('API key present?', !!process.env.EXPO_PUBLIC_GEMINI_API_KEY, 'length:', process.env.EXPO_PUBLIC_GEMINI_API_KEY?.length);
+
+
     if (apiKey === 'YOUR_GEMINI_API_KEY') {
       // Fallback for demo - return mock data
       console.warn('Gemini API key not configured, using mock data');
@@ -470,9 +481,17 @@ async function identifyPlantWithGemini(imageUri: string): Promise<{
       };
     }
 
+    // Determine mime type from URI
+    let mimeType = 'image/jpeg';
+    const lower = (imageUri || '').toLowerCase();
+    if (lower.endsWith('.png')) mimeType = 'image/png';
+    else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mimeType = 'image/jpeg';
+    else if (lower.endsWith('.heic') || lower.endsWith('.heif')) mimeType = 'image/heic';
+
+    console.log('Gemini request — mimeType:', mimeType, 'base64 length:', base64Image?.length);
     // Call Gemini API
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -503,8 +522,8 @@ Important:
 Return ONLY valid JSON, no other text.`,
                 },
                 {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
+                  inlineData: {
+                    mimeType,
                     data: base64Image,
                   },
                 },
@@ -516,7 +535,12 @@ Return ONLY valid JSON, no other text.`,
     );
 
     if (!geminiResponse.ok) {
-      throw new Error(`Gemini API error: ${geminiResponse.statusText}`);
+      let bodyText = '';
+      try {
+        bodyText = await geminiResponse.text();
+      } catch {}
+      console.log('Gemini failed:', geminiResponse.status, geminiResponse.statusText, bodyText?.slice(0, 300));
+      throw new Error(`Gemini API error: status ${geminiResponse.status} ${geminiResponse.statusText} body: ${bodyText?.slice(0, 300)}`);
     }
 
     const data = await geminiResponse.json();
