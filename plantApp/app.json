@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your ESP32 soil moisture sensor.",
+        "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to connect to your ESP32 soil moisture sensor."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +23,20 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "package": "com.anonymous.cauldroncare",
+      "manifestPlaceholders": {
+        "auth0Domain": "genai-417362476507225.ca.auth0.com",
+        "auth0Scheme": "cauldroncare"
+      }
     },
     "web": {
       "output": "static",
@@ -27,6 +44,14 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
+      [
+        "react-native-auth0",
+        {
+          "domain": "genai-417362476507225.ca.auth0.com",
+          "scheme": "cauldroncare"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -38,11 +63,30 @@
             "backgroundColor": "#0B0F10"
           }
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "76e36096-f7c1-45e6-be2c-cc5808327392"
+      }
     }
   }
 }

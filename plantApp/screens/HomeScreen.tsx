@@ -16,6 +16,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { ScoreBadge } from '@/components/ScoreBadge';
 import { SprayButton } from '@/components/SprayButton';
 import { PlantCard } from '@/components/PlantCard';
+import { SoilMoistureCard } from '@/components/SoilMoistureCard';
 import type { Plant } from '@/store/useAppStore';
 
 export function HomeScreen() {
@@ -87,6 +88,9 @@ export function HomeScreen() {
         </View>
 
         <SprayButton onPress={handleSpray} />
+
+        {/* Soil Moisture Sensor Card */}
+        <SoilMoistureCard />
 
         <View style={[styles.moneyCard, { backgroundColor: isDark ? Colors.dark.card : Colors.light.card }]}>
           <Text style={[styles.moneyLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
