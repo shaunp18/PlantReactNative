@@ -75,6 +75,7 @@ interface AppState {
 
   setAuthenticated: (isAuth: boolean) => void;
   setUser: (user: User) => void;
+  logout: () => void;
   completeOnboarding: () => void;
   addPlant: (plant: Plant) => void;
   addActivity: (activity: Activity) => void;
@@ -194,6 +195,13 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthenticated: (isAuth) => set({ isAuthenticated: isAuth }),
 
   setUser: (user) => set({ user }),
+
+  logout: () => set({ 
+    isAuthenticated: false, 
+    user: null,
+    // Optionally reset onboarding if you want users to go through it again
+    // hasOnboarded: false,
+  }),
 
   completeOnboarding: () => set({ hasOnboarded: true }),
 

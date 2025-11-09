@@ -8,6 +8,7 @@ import {
   Modal,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors, BrandColors } from '@/constants/theme';
@@ -21,7 +22,7 @@ export function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const { user, score, moneySavedUsd, plants, activity, addActivity, incrementScore, addMoneySaved } = useAppStore();
+  const { user, score, moneySavedUsd, plants, activity, addActivity, incrementScore, addMoneySaved, logout } = useAppStore();
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
 
   const handleSpray = () => {
@@ -32,6 +33,27 @@ export function HomeScreen() {
     };
     addActivity(newActivity);
     Alert.alert('Watering Spell Cast', 'Your plants are being watered! (UI stub)');
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => {
+            logout();
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handlePlantPress = (plant: Plant) => {
@@ -53,7 +75,15 @@ export function HomeScreen() {
             </Text>
           </View>
 
-          <ScoreBadge score={score} />
+          <View style={styles.headerRight}>
+            <ScoreBadge score={score} />
+            <TouchableOpacity
+              style={[styles.logoutButton, { backgroundColor: isDark ? Colors.dark.card : Colors.light.card }]}
+              onPress={handleLogout}
+              activeOpacity={0.7}>
+              <Ionicons name="log-out-outline" size={20} color={isDark ? '#EF4444' : '#DC2626'} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <SprayButton onPress={handleSpray} />
@@ -180,6 +210,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoutButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   userAvatar: {
     width: 40,

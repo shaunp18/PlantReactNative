@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors, BrandColors } from '@/constants/theme';
@@ -31,8 +31,8 @@ export function JoyConScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: isDark ? Colors.dark.background : Colors.light.background }]}
-      edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      edges={['top', 'bottom']}>
+      <View style={styles.content}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
             Robot Control
@@ -70,7 +70,7 @@ export function JoyConScreen() {
 
         <View style={styles.controlSection}>
           <View style={styles.joystickContainer}>
-            <Joystick onVectorChange={handleVectorChange} size={220} />
+            <Joystick onVectorChange={handleVectorChange} size={180} />
           </View>
 
           <View style={styles.buttonRow}>
@@ -143,7 +143,7 @@ export function JoyConScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -153,13 +153,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    flex: 1,
     padding: 20,
+    justifyContent: 'space-between',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   title: {
     fontSize: 28,
@@ -183,13 +185,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   videoSection: {
-    marginBottom: 32,
+    marginBottom: 20,
   },
   controlSection: {
-    gap: 24,
+    flex: 1,
+    justifyContent: 'center',
+    gap: 20,
   },
   joystickContainer: {
     alignItems: 'center',
+    marginBottom: 8,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -197,7 +202,7 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     flex: 1,
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     alignItems: 'center',
     shadowColor: '#000',
@@ -207,7 +212,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   controlButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
 });

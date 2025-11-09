@@ -25,12 +25,12 @@ export function ScoreBadge({ score }: ScoreBadgeProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -38,11 +38,11 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   label: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '600',
   },
   score: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: '700',
   },
 });
