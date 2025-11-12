@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid, NativeModules } from 'react-native';
-import { decode as base64Decode } from 'base-64';
+import { decode as base64Decode, encode as base64Encode } from 'base-64';
 import { esp32BLEConfig } from '@/config/esp32';
 
 // Helper to convert UUID to standard format (lowercase, with dashes)
@@ -344,6 +344,53 @@ export function useBLE() {
     }
   }, [device, isConnecting]);
 
+  // Write a spray command to ESP32 (water command)
+  const sprayWater = useCallback(async (): Promise<boolean> => {
+    try {
+      const m = getManager();
+      if (!m) {
+        setError('Bluetooth module unavailable. Use a custom dev client.');
+        return false;
+      }
+      if (!device) {
+        setError('No device connected');
+        return false;
+      }
+      const connected = await device.isConnected();
+      if (!connected) {
+        setError('Device disconnected');
+        return false;
+      }
+
+      // Prefer write with response; if that fails, fallback to without response
+      const payload = base64Encode('SPRAY');
+      try {
+        await device.writeCharacteristicWithResponseForService(
+          esp32BLEConfig.serviceUUID,
+          esp32BLEConfig.characteristicUUID,
+          payload
+        );
+        return true;
+      } catch (e) {
+        try {
+          await device.writeCharacteristicWithoutResponseForService(
+            esp32BLEConfig.serviceUUID,
+            esp32BLEConfig.characteristicUUID,
+            payload
+          );
+          return true;
+        } catch (err) {
+          const anyErr: any = err;
+          setError(anyErr?.message || 'Failed to send spray command');
+          return false;
+        }
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send spray command');
+      return false;
+    }
+  }, [device]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -368,6 +415,7 @@ export function useBLE() {
     scanForDevice,
     connectToDevice,
     disconnect,
+    sprayWater,
   };
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { RequestItem } from '@/components/RequestItem';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { GuildCard } from '@/components/GuildCard';
 import type { Friend } from '@/store/useAppStore';
+import { useBLE } from '@/hooks/useBLE';
+import { computeScores, mapRawToPercent, type PlantInput, type Thresholds } from '@/utils/cauldronScore';
 
 export function FriendsScreen() {
   const colorScheme = useColorScheme();
@@ -38,6 +40,23 @@ export function FriendsScreen() {
     createGuild,
     joinGuild,
   } = useAppStore();
+
+  const { moistureValue } = useBLE();
+
+  const RAW_MIN = 0;
+  const RAW_MAX = 2000;
+  const THRESH: Thresholds = { under: 35, over: 65 };
+
+  const selfScore = useMemo(() => {
+    // Build plant inputs using live BLE for the first plant ('1') and stored moisture for others
+    const plantInputs: PlantInput[] = (useAppStore.getState().plants || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      moisturePct: p.id === '1' ? mapRawToPercent(moistureValue, RAW_MIN, RAW_MAX) : p.soilMoisture,
+    }));
+    const summary = computeScores(plantInputs, THRESH);
+    return summary.total;
+  }, [moistureValue]);
 
   const [activeTab, setActiveTab] = useState<'friends' | 'guild'>('friends');
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
@@ -80,7 +99,7 @@ export function FriendsScreen() {
   };
 
   const friendsLeaderboard = [
-    { id: user?.id || 'me', name: user?.name || 'You', score, avatarUri: user?.avatarUri || null },
+    { id: user?.id || 'me', name: user?.name || 'You', score: selfScore, avatarUri: user?.avatarUri || null },
     ...friends.map(f => ({ id: f.id, name: f.name, score: f.score, avatarUri: f.avatarUri })),
   ].sort((a, b) => b.score - a.score);
 

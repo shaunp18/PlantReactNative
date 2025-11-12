@@ -17,6 +17,10 @@ import { ScoreBadge } from '@/components/ScoreBadge';
 import { SprayButton } from '@/components/SprayButton';
 import { PlantCard } from '@/components/PlantCard';
 import { SoilMoistureCard } from '@/components/SoilMoistureCard';
+import { CauldronWatch } from '@/components/CauldronWatch';
+import { CauldronView } from '@/components/CauldronView';
+import { useBLE } from '@/hooks/useBLE';
+import { mapRawToPercent, evaluatePlant } from '@/utils/cauldronScore';
 import type { Plant } from '@/store/useAppStore';
 
 export function HomeScreen() {
@@ -25,15 +29,45 @@ export function HomeScreen() {
 
   const { user, score, moneySavedUsd, plants, activity, addActivity, incrementScore, addMoneySaved, logout } = useAppStore();
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
+  const { moistureValue, isConnected, scanForDevice, connectToDevice, sprayWater } = useBLE();
 
-  const handleSpray = () => {
-    const newActivity = {
-      id: Date.now().toString(),
-      text: 'Casting Watering Spell... (stub)',
-      ts: Date.now(),
-    };
-    addActivity(newActivity);
-    Alert.alert('Watering Spell Cast', 'Your plants are being watered! (UI stub)');
+  const RAW_MIN = 0;
+  const RAW_MAX = 2000;
+  const THRESH = { under: 35, over: 65 };
+  const livePct = mapRawToPercent(moistureValue, RAW_MIN, RAW_MAX);
+  const toState = (pct: number | null) => {
+    if (pct === null) return 'UNKNOWN' as const;
+    if (pct < THRESH.under) return 'UNDER' as const;
+    if (pct > THRESH.over) return 'OVER' as const;
+    return 'IDEAL' as const;
+  };
+
+  const handleSpray = async () => {
+    const start = { id: Date.now().toString(), text: 'Casting Watering Spell...', ts: Date.now() };
+    addActivity(start);
+    try {
+      let ensured = isConnected;
+      if (!ensured) {
+        const dev = await scanForDevice();
+        if (dev) {
+          await connectToDevice(dev);
+          ensured = true;
+        }
+      }
+      if (!ensured) {
+        Alert.alert('Not Connected', 'Could not connect to ESP32. Please connect and try again.');
+        return;
+      }
+      const ok = await sprayWater();
+      if (ok) {
+        addActivity({ id: (Date.now() + 1).toString(), text: 'Watering spell sent to ESP32 ✨', ts: Date.now() });
+        Alert.alert('Spell Sent', 'Your ESP32 received the watering command.');
+      } else {
+        Alert.alert('Send Failed', 'Failed to send watering command.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'An error occurred while sending the command.');
+    }
   };
 
   const handleLogout = () => {
@@ -92,6 +126,9 @@ export function HomeScreen() {
         {/* Soil Moisture Sensor Card */}
         <SoilMoistureCard />
 
+        {/* CauldronWatch Gamified Dashboard */}
+        <CauldronWatch />
+
         <View style={[styles.moneyCard, { backgroundColor: isDark ? Colors.dark.card : Colors.light.card }]}>
           <Text style={[styles.moneyLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
             Gold Saved
@@ -108,9 +145,23 @@ export function HomeScreen() {
           <Text style={[styles.sectionTitle, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
             Your Cauldrons
           </Text>
-          {plants.map((plant) => (
-            <PlantCard key={plant.id} plant={plant} onPress={() => handlePlantPress(plant)} />
-          ))}
+          {plants.map((plant) => {
+            const pct = plant.id === '1' ? livePct : plant.soilMoisture;
+            const state = toState(pct as any);
+            return (
+              <TouchableOpacity key={plant.id} activeOpacity={0.85} onPress={() => handlePlantPress(plant)}>
+                <View style={{ marginVertical: 12 }}>
+                  <CauldronView
+                    title={`${plant.name} • ${plant.species}`}
+                    fillPct={pct as number | null}
+                    state={state}
+                    thresholds={THRESH}
+                    dark={isDark}
+                  />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={styles.section}>
@@ -146,40 +197,39 @@ export function HomeScreen() {
               {selectedPlant?.species}
             </Text>
 
-            <View style={styles.sensorReadings}>
-              <View style={styles.sensorItem}>
-                <Text style={[styles.sensorLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
-                  Soil Moisture
-                </Text>
-                <Text style={[styles.sensorValue, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
-                  {selectedPlant?.soilMoisture}%
-                </Text>
-              </View>
+            {(() => {
+              const sel = selectedPlant;
+              const selPct = sel ? (sel.id === '1' ? livePct : sel.soilMoisture) : null;
+              const selState = toState(selPct as any);
+              const { score } = evaluatePlant(selPct, THRESH);
+              const scoreColor = score >= 0 ? '#10B981' : '#EF4444';
+              return (
+                <>
+                  <View style={{ marginTop: 12 }}>
+                    <CauldronView
+                      title={sel?.name || 'Cauldron'}
+                      fillPct={selPct as number | null}
+                      state={selState}
+                      thresholds={THRESH}
+                      dark={isDark}
+                    />
+                  </View>
 
-              <View style={styles.sensorItem}>
-                <Text style={[styles.sensorLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
-                  Air Quality
-                </Text>
-                <Text style={[styles.sensorValue, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
-                  {selectedPlant?.airQuality}
-                </Text>
-              </View>
-
-              <View style={styles.sensorItem}>
-                <Text style={[styles.sensorLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
-                  Brew Health
-                </Text>
-                <Text style={[styles.sensorValue, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
-                  {selectedPlant?.brew}%
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.suggestionBox, { backgroundColor: isDark ? '#1E2528' : '#F0F0F0' }]}>
-              <Text style={[styles.suggestionText, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
-                💡 Consider a light mist soon (mock suggestion)
-              </Text>
-            </View>
+                  {/* Scoring display */}
+                  <View style={[styles.scoreCard, { backgroundColor: isDark ? '#1E2528' : '#F7F7F7' }]}>
+                    <View style={styles.scoreRow}>
+                      <Text style={[styles.scoreLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>Current Score</Text>
+                      <Text style={[styles.scoreValue, { color: scoreColor }]}>
+                        {score >= 0 ? '+' : ''}{score} pts
+                      </Text>
+                    </View>
+                    <Text style={[styles.scoreHint, { color: isDark ? '#9BA1A6' : '#687076' }]}>
+                      {score >= 10 ? '🎉 Perfect care! Keep it up!' : score >= 0 ? '👍 Good, but could be better' : '⚠️ Needs attention - adjust watering'}
+                    </Text>
+                  </View>
+                </>
+              );
+            })()}
 
             <TouchableOpacity
               style={[styles.closeButton, { backgroundColor: BrandColors.amethyst }]}
@@ -304,17 +354,25 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContent: {
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 28,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
   },
   modalSpecies: {
     fontSize: 16,
-    marginBottom: 24,
+    marginBottom: 8,
+    textAlign: 'center',
+    opacity: 0.8,
   },
   sensorReadings: {
     gap: 16,
@@ -341,13 +399,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   closeButton: {
-    padding: 16,
-    borderRadius: 12,
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   closeButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  scoreCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  scoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  scoreLabel: {
+    fontSize: 14,
     fontWeight: '600',
+  },
+  scoreValue: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  scoreHint: {
+    fontSize: 13,
+    textAlign: 'center',
   },
 });
