@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,12 @@ import {
   Modal,
   TouchableOpacity,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -17,10 +23,8 @@ import { ScoreBadge } from '@/components/ScoreBadge';
 import { SprayButton } from '@/components/SprayButton';
 import { PlantCard } from '@/components/PlantCard';
 import { SoilMoistureCard } from '@/components/SoilMoistureCard';
-import { CauldronWatch } from '@/components/CauldronWatch';
-import { CauldronView } from '@/components/CauldronView';
-import { useBLE } from '@/hooks/useBLE';
-import { mapRawToPercent, evaluatePlant } from '@/utils/cauldronScore';
+import { calculateSavingsPerSpray, formatMoney } from '@/utils/waterSavings';
+import { usePlantHealthMonitor } from '@/hooks/usePlantHealthMonitor';
 import type { Plant } from '@/store/useAppStore';
 
 export function HomeScreen() {
@@ -28,46 +32,53 @@ export function HomeScreen() {
   const isDark = colorScheme === 'dark';
 
   const { user, score, moneySavedUsd, plants, activity, addActivity, incrementScore, addMoneySaved, logout } = useAppStore();
+  
+  // Monitor ESP32 soil moisture and update plant health
+  usePlantHealthMonitor();
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
-  const { moistureValue, isConnected, scanForDevice, connectToDevice, sprayWater } = useBLE();
+  const [isSprayLoading, setIsSprayLoading] = useState(false);
+  
+  // Animation for money card bounce
+  const moneyCardScale = useSharedValue(1);
+  
+  const moneyCardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: moneyCardScale.value }],
+  }));
 
-  const RAW_MIN = 0;
-  const RAW_MAX = 2000;
-  const THRESH = { under: 35, over: 65 };
-  const livePct = mapRawToPercent(moistureValue, RAW_MIN, RAW_MAX);
-  const toState = (pct: number | null) => {
-    if (pct === null) return 'UNKNOWN' as const;
-    if (pct < THRESH.under) return 'UNDER' as const;
-    if (pct > THRESH.over) return 'OVER' as const;
-    return 'IDEAL' as const;
-  };
-
-  const handleSpray = async () => {
-    const start = { id: Date.now().toString(), text: 'Casting Watering Spell...', ts: Date.now() };
-    addActivity(start);
-    try {
-      let ensured = isConnected;
-      if (!ensured) {
-        const dev = await scanForDevice();
-        if (dev) {
-          await connectToDevice(dev);
-          ensured = true;
-        }
-      }
-      if (!ensured) {
-        Alert.alert('Not Connected', 'Could not connect to ESP32. Please connect and try again.');
-        return;
-      }
-      const ok = await sprayWater();
-      if (ok) {
-        addActivity({ id: (Date.now() + 1).toString(), text: 'Watering spell sent to ESP32 ✨', ts: Date.now() });
-        Alert.alert('Spell Sent', 'Your ESP32 received the watering command.');
-      } else {
-        Alert.alert('Send Failed', 'Failed to send watering command.');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'An error occurred while sending the command.');
-    }
+  const handleSpray = () => {
+    if (isSprayLoading) return; // Prevent multiple presses
+    
+    // Start loading state
+    setIsSprayLoading(true);
+    
+    // Calculate money saved based on number of plants
+    const numPlants = Math.max(1, plants.length); // At least 1 plant for calculation
+    const savingsPerSpray = calculateSavingsPerSpray(numPlants);
+    
+    // Bounce animation for money card
+    moneyCardScale.value = withSequence(
+      withSpring(1.1, { damping: 8, stiffness: 300 }),
+      withSpring(1, { damping: 8, stiffness: 300 })
+    );
+    
+    // Add the savings to the total
+    addMoneySaved(savingsPerSpray);
+    
+    // Create activity log entry
+    const newActivity = {
+      id: Date.now().toString(),
+      text: `Efficient watering saved ${formatMoney(savingsPerSpray)}`,
+      ts: Date.now(),
+    };
+    addActivity(newActivity);
+    
+    // Optional: Increment score as well
+    incrementScore(10);
+    
+    // Reset loading after 2 seconds
+    setTimeout(() => {
+      setIsSprayLoading(false);
+    }, 2000);
   };
 
   const handleLogout = () => {
@@ -121,15 +132,17 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <SprayButton onPress={handleSpray} />
+        <SprayButton onPress={handleSpray} isLoading={isSprayLoading} />
 
         {/* Soil Moisture Sensor Card */}
         <SoilMoistureCard />
 
-        {/* CauldronWatch Gamified Dashboard */}
-        <CauldronWatch />
-
-        <View style={[styles.moneyCard, { backgroundColor: isDark ? Colors.dark.card : Colors.light.card }]}>
+        <Animated.View
+          style={[
+            styles.moneyCard,
+            { backgroundColor: isDark ? Colors.dark.card : Colors.light.card },
+            moneyCardAnimatedStyle,
+          ]}>
           <Text style={[styles.moneyLabel, { color: isDark ? '#9BA1A6' : '#687076' }]}>
             Gold Saved
           </Text>
@@ -139,7 +152,7 @@ export function HomeScreen() {
           <Text style={[styles.moneySubtitle, { color: isDark ? '#9BA1A6' : '#687076' }]}>
             from efficient watering
           </Text>
-        </View>
+        </Animated.View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: isDark ? Colors.dark.text : Colors.light.text }]}>

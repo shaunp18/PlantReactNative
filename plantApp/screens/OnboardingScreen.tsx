@@ -87,6 +87,7 @@ export function OnboardingScreen() {
         lastWatered: 'Today',
         photoUri: plantPhotoUri,
         location: plantLocation.trim() || undefined,
+        isConnectedToSensor: true, // First plant is connected to ESP32 sensor
       });
       setStep(3);
     } else if (step === 3) {
