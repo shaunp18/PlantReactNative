@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,17 +21,26 @@ import { Colors, BrandColors } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { ScoreBadge } from '@/components/ScoreBadge';
 import { SprayButton } from '@/components/SprayButton';
-import { PlantCard } from '@/components/PlantCard';
 import { SoilMoistureCard } from '@/components/SoilMoistureCard';
 import { calculateSavingsPerSpray, formatMoney } from '@/utils/waterSavings';
 import { usePlantHealthMonitor } from '@/hooks/usePlantHealthMonitor';
 import type { Plant } from '@/store/useAppStore';
+import { CauldronView } from '@/components/CauldronView';
+import { useBLE } from '@/hooks/useBLE';
+import { evaluatePlant, mapRawToPercent, type Thresholds } from '@/utils/cauldronScore';
 
 export function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const { user, score, moneySavedUsd, plants, activity, addActivity, incrementScore, addMoneySaved, logout } = useAppStore();
+  const { moistureValue } = useBLE();
+
+  // Sensor mapping and thresholds
+  const RAW_MIN = 0;
+  const RAW_MAX = 2000;
+  const THRESH: Thresholds = { under: 35, over: 65 };
+  const livePct = useMemo(() => mapRawToPercent(moistureValue, RAW_MIN, RAW_MAX), [moistureValue]);
   
   // Monitor ESP32 soil moisture and update plant health
   usePlantHealthMonitor();
@@ -160,14 +169,14 @@ export function HomeScreen() {
           </Text>
           {plants.map((plant) => {
             const pct = plant.id === '1' ? livePct : plant.soilMoisture;
-            const state = toState(pct as any);
+            const { status } = evaluatePlant(pct, THRESH);
             return (
               <TouchableOpacity key={plant.id} activeOpacity={0.85} onPress={() => handlePlantPress(plant)}>
                 <View style={{ marginVertical: 12 }}>
                   <CauldronView
                     title={`${plant.name} • ${plant.species}`}
                     fillPct={pct as number | null}
-                    state={state}
+                    state={status as any}
                     thresholds={THRESH}
                     dark={isDark}
                   />
@@ -213,8 +222,7 @@ export function HomeScreen() {
             {(() => {
               const sel = selectedPlant;
               const selPct = sel ? (sel.id === '1' ? livePct : sel.soilMoisture) : null;
-              const selState = toState(selPct as any);
-              const { score } = evaluatePlant(selPct, THRESH);
+              const { status: selState, score } = evaluatePlant(selPct, THRESH);
               const scoreColor = score >= 0 ? '#10B981' : '#EF4444';
               return (
                 <>
@@ -222,7 +230,7 @@ export function HomeScreen() {
                     <CauldronView
                       title={sel?.name || 'Cauldron'}
                       fillPct={selPct as number | null}
-                      state={selState}
+                      state={selState as any}
                       thresholds={THRESH}
                       dark={isDark}
                     />
